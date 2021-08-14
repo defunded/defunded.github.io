@@ -2,8 +2,676 @@
 <head>
   <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
   <title>Quarters</title>
+	<style>
+	  div {
+		  margin-top: 10px;
+      margin-bottom: 10px;
+		}
+		.margTop { margin-top: 25px; }
+		.margTopPlus { margin-top: 35px; }
+	</style>
+  <script>
+								    
+    var americanTime = true		      
+
+    function initialize() {
+//testGetLocStor()
+console.log(isSupported())		
+      displayStartEnd(checkSavedData())
+      run()
+      // testOnly()
+    }
+
+    // run calls itself every .5 seconds
+    function run() {			
+      displayCurrTime()      
+      percentGone()
+      showHoursTillAwake()
+      displayQtr(1/4) 
+      displayQtr(2/4) 
+      displayQtr(3/4) 
+      displayQtr(4/4) 
+			setTimeout(run, 500)
+    }
+    
+    function displayStartEnd(saved) {
+      var prevBT
+      var prevAT
+      // updateSelVals checks for undefined not null, so change checkSavedData to undefined
+
+      // right now, if just 1 out of possible 6 sel vals has been saved
+      // then the 5 null indices/data will be used      
+
+      if (saved == null) {
+			  console.log("Upon load (or time format chg), saved (in lStor) == null")
+        prevBT = getCurrSetTime("b")
+        prevAT = getCurrSetTime("a")
+      } else {
+        prevBT = saved[0]
+        prevAT = saved[1]
+      }
+
+      makeFormsNew()      
+      updateSelVals("bed", prevBT)
+      updateSelVals("awk", prevAT)
+      if (americanTime) {
+       updateAmPm("bed", prevBT) // need to pass in prevTime bc time overwritten by upSV
+       updateAmPm("awk", prevAT)
+      }
+    }
+			
+    function displayCurrTime() {
+      var h = new Date().getHours()
+      var m = new Date().getMinutes()
+      var s = new Date().getSeconds()
+      var twelveHr = ""
+
+      m = addZero(m)
+      s = addZero(s);
+
+      if (americanTime) {
+        var ctOutput = convertTo12Hr(h, twelveHr)
+        h = ctOutput[0]
+        twelveHr =  ctOutput[1]
+      } else {
+        twelveHr = ""
+      }
+      document.getElementById('txt').innerHTML =
+        "Currently  " + h + ":" + m + ":" + s + " " + twelveHr				
+    }
+
+    // add zero in front of numbers < 10
+    function addZero(i) {
+      if (i < 10) {
+        i = "0" + i
+      }
+      return i
+    }
+		
+    function convertTo12Hr(h, twelveHr) {
+      if (h >= 12) {
+        twelveHr = "PM"
+				if (h > 12){
+				  h = h - 12        
+				}	
+      } else {
+        twelveHr = "AM"
+        if (h === 0){
+          h = 12
+        }
+      }
+      return [h, twelveHr]
+    }      
+
+    function percentGone() {      
+		  var hrUsed = hoursUsed()
+			// console.log("hrUd: " + hrUsed)
+			var perGone =  hrUsed / calcDayLength()
+      perGone = Math.floor(perGone * 100)
+      document.getElementById('perLf').innerHTML = perGone + "% of day is gone."
+      document.title = perGone + "% Gone"
+    }
+    
+    function calcDayLength() {
+      var awkTime = getAwakeTime()
+      var bedtime = getBedtime()
+      var currTime = getCurrTime()
+			var daylength									
+			// console.log("at: " + awkTime + " bt: " + bedtime + " ct: " + currTime)
+			
+			// didn't do || currTime = bedtime for below bc why calc % of day gone if bedtime is now?
+			// 1st if = normal at <= ct < bt, day starts & ends today
+			if ((awkTime < currTime || awkTime == currTime) && currTime < bedtime) { 
+			  daylength = bedtime - awkTime
+			} else if (awkTime > currTime && currTime > bedtime) {	// day started ystr & ends tmrw		  
+				console.log("at > ct > bt")
+				// daylength = 24 * 60 - awkTime + bedtime + 24 * 60
+				daylength = ((24 * 60) - awkTime) + (24 * 60) + bedtime
+			} else { // also covers: at == ct > bt (day ends tmrw)
+			  daylength = 24 * 60 - awkTime + bedtime
+			}
+      // debug("cDL: ", "dLn = " + daylength)
+			return daylength
+    }
+		
+		function hoursUsed() {
+		  var awkTime = getAwakeTime()
+			var currTime = getCurrTime()
+			
+			if (awkTime <= currTime) {
+			  return currTime - awkTime
+	    } else {
+			  return 24 * 60 - awkTime + currTime
+		  }
+		}		
+
+    // returns awake time in minutes as Euro time
+		function getAwakeTime() {
+      var hr = getValParseInt("awk-hr-sel")
+      var min = getValParseInt("awk-min-sel")
+      
+      if (americanTime) {
+        var suf = document.getElementById("awk-suf-sel").value
+        hr = convertTo24Hr(suf, hr)
+      }
+      return hr * 60 + min
+    }
+
+    function getBedtime() {
+      var hr = getValParseInt("bed-hr-sel")
+      var min = getValParseInt("bed-min-sel")
+
+      if (americanTime) {
+        var suf = document.getElementById("bed-suf-sel").value
+        hr = convertTo24Hr(suf, hr)
+      }
+      return hr * 60 + min
+    }
+
+    function getCurrTime() {
+      return new Date().getHours() * 60 + new Date().getMinutes()
+    }    
+     
+		function getValParseInt(id) {
+			return parseInt(document.getElementById(id).value)
+		}
+		
+		function convertTo24Hr(suf, hr) {
+      if (suf === "AM" && hr == 12){
+        return 0
+      }
+			return (suf === "PM" && hr !== 12) ? hr + 12 : hr
+		}
+
+	  function switchTime() {
+      americanTime = americanTime !== true
+      localStorage.setItem("americanTime",americanTime)
+      displayStartEnd(null)
+    }
+
+    // adds am/pm html vals
+		// needs prev suf or time whichever exist
+		// this called when first ran and when going from euro time to us time
+    function updateAmPm(time, prevTime) {
+		  // get prev time if it exist						
+			var id = time + "-suf-sel"
+			var defaultVal
+			
+		  // first chk for PREV suf value existence, the val won't exist at this point, just the select			
+			if (prevTime[2] !== undefined) {
+			// when do hr/min vals not exist?
+      // when first ran, mFN creates the forms but there are no vals
+			// by the time this funct called, hr/min will exists, always
+			  defaultVal = prevTime[2] //document.getElementById(id).value
+			} else { // if doesn't get the prev time, if it exist (if not get currTime), to figure am/pm
+			  if (prevTime[0] !== undefined) {
+				  defaultVal = convertHrToSuffix(prevTime[0])
+				} else if (time[0].toLowerCase() === "b") {
+				  defaultVal = "PM"
+				} else {
+				  defaultVal = "AM"
+				}
+			}
+			// have the correct suffix, so now add the 2 vals to the select for either bt or at
+      // make html to add
+      // add  html to select
+
+      var html = '<option value=' + defaultVal + '>' + defaultVal + '</option>'
+
+      if (defaultVal === "PM") {
+        html += '<option value="AM">AM</option>'
+      } else {
+        html += '<option value="PM">PM</option>'
+      }
+
+      if (doesElmtExist(id)) {
+        document.getElementById(id).innerHTML = html
+      }
+    }
+
+    function convertHrToSuffix(hr) {
+      if (hr < 12) { // which basically means, if not Euro then AM
+        return "AM"
+      } else {
+        return "PM"
+      }
+    }
+
+    // create hr & min for start & end times		
+    function updateSelVals(time, prevSetTime) { // pST = [h, m, suf]
+		  var deOn = "in upSV() "
+      var defaultHr, defaultMin, begin, end //, prevSetTime
+
+      // set default awk time (& suffix if Amer) bc it's the same for Amer or Euro time
+			// at least until load saved data functionality is added
+      if (time[0].toLowerCase() === "b") {
+        time = "bed"
+      } else {
+        time = "awk"
+        defaultHr = 7 // * might need to set suf if amerTime
+				if (americanTime && prevSetTime[2] === undefined) {
+				  prevSetTime[2] = "AM"
+				}	
+      }
+			
+      // set hour range & default hr (but not suffix)
+      if (americanTime) {
+        begin = 1
+        end = 12
+        if (time === "bed") {
+          defaultHr = 11
+					if (prevSetTime[2] === undefined) {
+				    prevSetTime[2] = "PM"
+				  } 	
+        }
+      } else {
+        begin = 0
+        end = 23
+        if (time === "bed") {
+          defaultHr = 23
+        }
+      }
+
+      // if there was a prev hr, use it; ie, bt/at selects aren't empty
+      if (prevSetTime[0] !== undefined) { // pST = [h, m, suf]
+			// Todo: Note: trouble is that hr might not be undef, but suf could be !!!!!!!!!!!			
+			// Fixed 12.17.321 - checked & added default suf if undefined
+        if (!americanTime) { // if american time is true, then prev time would be in 24 hr, so convert to 12
+				  defaultHr = convertTo24Hr(prevSetTime[2], prevSetTime[0])
+				}	else {
+				  defaultHr = convertTo12Hr(prevSetTime[0])[0] // conTo12 returns an array, doing [0] picks first elmt
+				}
+        debug(deOn, "dHr: " + defaultHr)
+      }
+      // else {
+			//   debug(deOn, "time = (b) " + time + " deHr: (11) " + defaultHr)
+			// }
+  
+      createSelVals(time, defaultHr, "hr", begin, end)
+
+      if (prevSetTime[1] === undefined) {
+        defaultMin = 0
+      } else {
+        defaultMin = prevSetTime[1]
+      }
+      createSelVals(time, defaultMin, "min", 0, 55)
+    }
+
+    function createSelVals(time, deTime, units, begin, end) {
+      var deOn = "In crtSelVal() "
+			var html
+      debug(deOn, "deT(" + units + ")" + " " + deTime)
+      if (units[0] !== "h" && (deTime === 0 || deTime === 5)) {
+        html = addZeroToMin(deTime)
+      } else {
+        html = "<option value=" + deTime + ">" + deTime + "</option>"
+      }
+
+      for (var i = begin; i <= end; i++) {
+        if (i !== deTime) {
+          if (units[0] !== "h" && (i === 0 || i === 5)) {
+            html += addZeroToMin(i)
+          }
+          else {
+            html += "<option value=" + i + ">" + i + "</option>"
+          }
+        }
+        if (units[0] !== "h") {
+          i += 4
+        }
+      }
+      // console.log("cSelVal: " + html)
+      document.getElementById(time + "-" + units + "-sel").innerHTML = html
+    }
+
+    function addZeroToMin(deTime) {
+      var html
+      if (deTime === 0 || deTime === 5) {
+			  deTime = "0" + deTime
+        html = "<option value=" + deTime + ">" + deTime + "</option>"
+      }
+      return html
+    }
+
+		var btForm = '<form id="bed-fm">\n' +
+      '    End:\n' +
+      '    <select id="bed-hr-sel" onchange="saveSelect(this)">\n' +
+      '      </select> :      \n' +
+      '      <select id="bed-min-sel" onchange="saveSelect(this)">\n'
+
+    var atForm = '<br>\n' +
+    '<form>\n' +
+    '  Start:\n' +
+    '  <select id="awk-hr-sel" onchange="saveSelect(this)">    \n' +
+    '  </select> :' +
+    '  <select id="awk-min-sel" onchange="saveSelect(this)">'
+		
+		var atSufBegin = '<select id="awk-suf-sel" onchange="saveSelect(this)">'
+    var btSufBegin = '<select id="bed-suf-sel" onchange="saveSelect(this)">'
+    var formEnd = '</form>'
+		var selEnd = '</select>'
+
+    // creates the forms & the select inputs w/o hr/min/suf values
+    function makeFormsNew() {
+      var bed = btForm + selEnd
+      var awk = atForm + selEnd
+      if (americanTime) {
+        bed += btSufBegin + selEnd
+        awk += atSufBegin + selEnd
+      }
+      document.getElementById("bt").innerHTML = bed + formEnd
+      document.getElementById("at").innerHTML = awk + formEnd
+    }
+				
+		// get current set times to pass to createSelVals()
+		// returns undefined [h,m,suf] if the bt/at selects are empty
+		function getCurrSetTime(time) {
+		 var deOn = "In gCST() "
+		  if (time[0].toLowerCase() === "b") {
+			  time = "bed"
+			} else {
+			 time = "awk"
+			}
+      // console.log("doc b/a-hr-sl: " + document.getElementById(time + "-hr-sel").value)
+			
+			var h, m
+			// if a value has been set, get it for awk & bed h, m & suf			
+      // var docEmt = document.getElementById(time + "-hr-sel")
+      // if (docEmt !== null && docEmt.value !== "") {
+			var id = time + "-hr-sel"
+			if (doesElmtExist(id) && doesValExist(id)) {
+			  debug("\n"+deOn, "b/a-hr-sel:  " + document.getElementById(id).value) //time + "-hr-sel").value)
+			  h = getValParseInt(time + "-hr-sel")
+				m = getValParseInt(time + "-min-sel")
+        debug(deOn, "docEm != null && .value != ''. h: " + h)
+			}
+
+			// need to change below to chk if time-suf-sel exist
+      //if (americanTime) {
+			id = time + "-suf-sel"
+			var suf
+			if (doesElmtExist(id)) {
+        suf = document.getElementById(id) // (time + "-suf-sel") //.value								
+        // need both chks, bc 1st chks if form's been made
+        // 2nd chks if it's gotten a value
+        //if (suf !== null && suf.value !== "") {
+				if (doesValExist(id)) {
+          suf = suf.value
+          // debug(deOn, "this happened and didn't crash!! suf.val: " + suf)
+        }
+      }
+      debug(deOn, "h " + h + " m " + m + " sf " + suf)
+			return [h, m, suf]
+		}
+		
+		// returns t/f if a html element exist
+		function doesElmtExist(id) {
+		  return document.getElementById(id) !== null
+		}
+		
+		// returns t/f if a html value exist
+		function doesValExist(id) {		  
+			if (doesElmtExist(id)) {
+			  return document.getElementById(id).value !== ""
+			}
+			return false
+		}
+		
+		var triggered = false
+		// shows hours till awake time if 9hrs or less till then
+		function showHoursTillAwake() {
+      var timeTill = calcTimeTill(getAwakeTime())
+       // console.log(timeTill + "  h:m - " + timeTill[0] + ":" + timeTill[1])
+			 // console.log("bt: " + getBedtime() + " ct: " + getCurrTime())
+			
+			if (timeTill[0]  <= 9 && (! getBedtime() < getCurrTime())) { //(calcTimeTillFract(1)[0] < 24)) {
+				var text				
+				if (timeTill[0] == 0 && timeTill[1] == 0) {
+				  text = "Time left 0:00 - Time to wake up!"
+				} else {
+				  if (timeTill[1] < 10) {
+					  timeTill[1] = addZero(timeTill[1])
+					}
+				  text = "Time left until have to wake up: " + timeTill[0] + ":" + timeTill[1]
+				}				
+				document.getElementById('awakeTime').innerHTML = text
+				triggered = true
+			} else if (triggered) {
+			  document.getElementById('awakeTime').innerHTML = ""
+				triggered = false
+			}
+    }
+
+		// param target time in min
+		// returns [hours, min] till bedtime
+		function calcTimeTill(target) {      
+      var currTime = getCurrTime()
+      var timeLeft
+
+      // Current Time always <= 1439
+			if (currTime > target) { // target time is tmrw; is this true? yes bc target is a specific-time not an amount
+        timeLeft = (24 * 60) - currTime + target
+      } else { // if equal then 0 till BT, not 24
+        timeLeft = target - currTime
+      }
+			return convertToHrMin(timeLeft)
+    }
+		
+		function convertToHrMin(timeAmt){		
+      var hr = Math.floor(timeAmt / 60);
+      var min = Math.floor(timeAmt - (hr * 60))			
+			return [hr, min]
+		}
+    
+		// returns [hr, min] till fraction of day occurs
+    function calcTimeTillFract(fraction) {
+      // convert the fraction to a target time
+      // fraction * dayLength	 = fractDayLength or fractTime or fractAmount
+			// awk time start today or yesterday?
+			var at = getAwakeTime()
+			var ct = getCurrTime()
+			var passedAmt
+			if (at > ct) { // srt yst
+			  var ystTime = 24*60 - at
+				passedAmt = ystTime + ct						
+			} else {
+			  passedAmt = ct - at
+			}
+						
+			var timeTill, fAmt = fraction * calcDayLength()				
+			
+			if (passedAmt >= fAmt) {
+				timeTill = 0
+			}	else {
+				timeTill = fAmt - passedAmt				
+			}
+			
+			// console.log("f: " + fraction + " fA: " + fAmt + "  pAmt: " + passedAmt + " tt: " + timeTill)
+      // if (fraction === 1){
+			//   console.log("tarT: " + tarTime) // + "  at: " + getAwakeTime() + " dayLen: " + calcDayLength())
+      // }
+      // if = or < 4 hrs (1/4 time) till bedtime, don't show 2/4, 3/4
+      // if = or < (2/4 time) till BT, !show 3/4 
+      // var timeTill = calcTimeTill(tarTime) // c'd out 10.15
+			// if (fraction === .5) {
+			// 	console.log("f: " + fraction + " totMin: " + timeTill
+			// 		+ "  h:m - " + timeTill[0] + ":" + timeTill[1])
+      // }
+			// console.log("timeTill: " + timeTill)
+			return convertToHrMin(timeTill)
+    }		
+
+    function displayQtr(fraction) {
+      var timeTill = calcTimeTillFract(fraction)			
+			//var fractTime = getAwakeTime() + (calcDayLength() * fraction)
+			/*if (fraction === .5) {
+				console.log("fracTime: " + fractTime)
+				console.log("fiddy cT: " + getCurrTime())
+			}*/
+		  var min = addZero(timeTill[1])
+		
+			if (fraction === 1) {
+			  document.getElementById("qtr"+(fraction * 4)).innerHTML = timeTill[0] + ":" + min // timeTill[1] 
+				 + " until day is over."
+        var title = document.title.valueOf()
+        // document.title = " (" + timeTill[0] + ":" + min + " left) " + title
+        document.title = timeTill[0] + ":" + min + " left - " + title
+			}	else if (!(timeTill[0] == 0 && min == "00")) { //((getAwakeTime() + (calcDayLength() * fraction)) > getCurrTime())  {
+			//if (fractTime > getCurrTime()) {
+				// console.log("cT: " + getCurrTime())
+				/*document.getElementById("qtr"+(fraction * 4)).innerHTML = timeTill[0] + " h " + timeTill[1] + " m "
+					+ " until " + fraction * 100 + "% day is gone."*/
+				document.getElementById("qtr"+(fraction * 4)).innerHTML = timeTill[0] + ":" + min // timeTill[1] 
+				 + " until " + fraction * 100 + "% day is gone."
+			  /*document.getElementById("qtr"+(fraction * 4)).innerHTML = timeTill[0] + "h " + timeTill[1]
+				 + " until " + fraction * 100 + "% day is gone."*/
+			} else {
+			  document.getElementById("qtr"+(fraction * 4)).innerHTML = ""
+			}			
+    }				          
+		
+		// saves a select's value
+		function saveSelect(el) {
+		  var deOn = "In saveSelect() "			
+			var locStor = localStorage
+			
+			// look at how they do it: https://mdn.github.io/dom-examples/web-storage/main.js
+			
+			locStor.setItem(el.id, el.value)
+			debug(deOn, "lStor: " + locStor.getItem(el.id) + " el-id: " + el.id)
+			//testGetLocStor()
+			
+		}
+
+		// returns an array if there's saved data otherwise null
+		function checkSavedData() {
+      var pre = "bed"
+      var bt = []
+      var at = []
+      var saved = [bt, at]
+			// var saved = [['','',''], ['','','']]
+			console.log("saved before var: " + saved)
+      for (var i = 0; i < 2; i++) {
+        /*var hr = pre + "-hr-sel"
+				console.log("hr in chkSvdData= " + hr)*/
+				saved[i][0] = ifNullRetUndef(localStorage.getItem(pre + "-hr-sel"))
+        saved[i][1] = ifNullRetUndef(localStorage.getItem(pre + "-min-sel"))
+        saved[i][2] = ifNullRetUndef(localStorage.getItem(pre + "-suf-sel"))
+        pre = "awk"
+      }
+			
+			/*saved[0][0] = ifNullRetUndef(localStorage.getItem('bed-hr-sel')) // Change back to: pre + "-hr-sel"
+      saved[0][1] = ifNullRetUndef(localStorage.getItem("bed-min-sel"))
+      saved[0][2] = ifNullRetUndef(localStorage.getItem("bed-suf-sel"))			
+			saved[1][0] = ifNullRetUndef(localStorage.getItem("awk-hr-sel")) // Change back to: pre + "-hr-sel"
+      saved[1][1] = ifNullRetUndef(localStorage.getItem("awk-min-sel"))
+      saved[1][2] = ifNullRetUndef(localStorage.getItem("awk-suf-sel"))*/
+			
+			console.log("saved after var: " + saved)
+			console.log("saved[0] var: " + saved[0][0])
+			console.log("saved[0] var: " + saved[0][1])
+			console.log("saved[0] var: " + saved[0][2])
+			
+      if (!foundSavedData(saved)) {
+        saved = null
+      }				
+			
+      return saved
+    }
+
+    function ifNullRetUndef(data) {
+console.log("data in iNRU: " + data);
+      if (data === null){
+        return undefined
+      }
+			return data
+    }
+
+    // could make an array to store the indices that had saved data
+    function foundSavedData(saved) {
+      for (var i = 0; i < 2; i++) {
+        for(var j = 0; j < 3; j++) {
+          if (saved[i][j] !== undefined) {
+            return true // saved[0] is has an item been found, t/f
+          }
+        }
+      }
+      return false
+    }
+		
+		function testGetLocStor(){
+		  console.log("bed hr: " + localStorage.getItem('bed-hr-sel'))
+			console.log("awk hr: " + localStorage.getItem('awk-hr-sel'))
+		}
+		
+
+function isSupported() {
+  try {
+    // const key = "0x55";
+    storage.setItem('x99',0);
+    //storage.removeItem(key);
+    return true;
+  } catch (e) {
+    console.log('err msg: ' + e)
+    return false;
+  }
+}
+
+    // -- - -- Below for Debug only -- - -- //
+    var show = 0
+
+    function debugInfo(msg) {
+      if (show === 1) {
+        console.log(msg)
+      }
+    }
+
+    // make a var per function that way can shut off per function
+    function debug(methName, msg) {
+      if (methName !== "") {
+        console.log(methName + " " + msg)
+      }
+    }
+
+    function testOnly() {
+
+      var html = document.getElementById("bed-hr-sel")
+      console.log("html be-hr-sel: " + html)
+
+      var arr, h, m
+      var arr, h, m
+      arr = [h, m]
+      if(arr[0] === null) { // not true == undef
+        console.log(arr[0])
+      }
+    }
+		
+		function testHtmlElmt(el) {
+		  var name = el.name // shows nothing
+			var len = el.length
+			var ops = el.options
+			var val = el.value			
+			var id = el.id
+			console.log("name: " + name + " len: " + len + " opts: " + ops + 
+									" val: " + val + " id: " + id)
+		}
+
+  </script>
 </head>
-<body>
-Hello All!
+
+<body onload="initialize()" style="background-color: black;color: white;">
+
+<!--<samp id="txt" style="font-size: 16px;"></samp>-->
+<span id="txt" style="font-size: 16px; margin-top: 10px"></span><button type="button" onclick="switchTime()" style="margin-left: 15px">Time Format</button>
+
+<div id="at"></div>
+
+<div id="bt"></div>
+<div id="qtr1" class="margTopPlus"></div>
+<div id="qtr2"></div>
+<div id="qtr3"></div>
+<div id="qtr4"></div>
+<div id="perLf" class="margTopPlus"></div>
+<div id="awakeTime" class="margTop"></div>
 </body>
 </html>
